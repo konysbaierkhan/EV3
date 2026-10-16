@@ -47,7 +47,7 @@ jobs:
           PROJECT_DIR=$(dirname "$APP_DIR")
           cd "$PROJECT_DIR"
 
-          # 3. Авто-исправление: добавляем недостающий цвет фона иконки ic_launcher_background
+          # 3. Авто-исправление ресурса цвета иконки ic_launcher_background
           mkdir -p app/src/main/res/values
           if ! grep -rq "ic_launcher_background" app/src/main/res/values/; then
             cat << 'EOF' > app/src/main/res/values/ic_launcher_background.xml
@@ -58,10 +58,49 @@ jobs:
           EOF
           fi
 
-          # 4. Запускаем сборку APK
+          # 4. Авто-исправление outlinedButtonBorder в ControlScreen.kt
+          python3 - << 'PYEOF'
+          import glob, re
+
+          for path in glob.glob("app/src/main/java/**/ControlScreen.kt", recursive=True):
+              with open(path, "r", encoding="utf-8") as f:
+                  content = f.read()
+
+              target = "ButtonDefaults.outlinedButtonBorder"
+              result = []
+              i = 0
+              while i < len(content):
+                  idx = content.find(target, i)
+                  if idx == -1:
+                      result.append(content[i:])
+                      break
+                  result.append(content[i:idx])
+                  result.append(target)
+                  pos = idx + len(target)
+                  # Пропускаем вызов скобок (...) и .copy(...) после outlinedButtonBorder
+                  while True:
+                      m = re.match(r'\s*(?:\.copy\s*)?\(', content[pos:])
+                      if not m:
+                          break
+                      pos += m.end()
+                      depth = 1
+                      while pos < len(content) and depth > 0:
+                          if content[pos] == '(':
+                              depth += 1
+                          elif content[pos] == ')':
+                              depth -= 1
+                          pos += 1
+                  i = pos
+
+              with open(path, "w", encoding="utf-8") as f:
+                  f.write("".join(result))
+              print(f"Исправлен файл: {path}")
+          PYEOF
+
+          # 5. Запускаем сборку APK
           gradle assembleDebug --no-daemon --stacktrace
 
-          # 5. Копируем готовый APK для скачивания
+          # 6. Копируем готовый APK для скачивания
           mkdir -p "$GITHUB_WORKSPACE/dist"
           APK_FILE=$(find . -name "app-debug.apk" | head -n 1)
           cp "$APK_FILE" "$GITHUB_WORKSPACE/dist/EV3Controller.apk"
