@@ -1,0 +1,46 @@
+name: Build EV3Controller Pro APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    name: Сборка Android APK (Debug)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Скачивание исходного кода
+        uses: actions/checkout@v4
+
+      - name: Установка JDK 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Настройка Gradle и кэширования
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Права на выполнение gradlew
+        run: chmod +x ./gradlew
+
+      - name: Сборка Debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Подготовка имен файлов APK
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/EV3Controller.apk
+
+      - name: Загрузка готового APK в Artifacts (app-debug.apk и EV3Controller.apk)
+        uses: actions/upload-artifact@v4
+        with:
+          name: EV3Controller-Pro-APK
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/EV3Controller.apk
+          if-no-files-found: error
+          retention-days: 90
