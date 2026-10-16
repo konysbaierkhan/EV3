@@ -29,7 +29,7 @@ jobs:
 
       - name: Распаковка архива и сборка Debug APK
         run: |
-          # Распаковываем zip-архив, если проект загружен архивом
+          # 1. Распаковываем zip-архив
           for z in *.zip; do
             if [ -f "$z" ]; then
               echo "Распаковка архива $z..."
@@ -37,22 +37,31 @@ jobs:
             fi
           done
 
-          # Ищем папку с Android-проектом (где лежит папка app)
+          # 2. Находим папку с Android-проектом
           APP_DIR=$(find . -maxdepth 3 -type d -name "app" | head -n 1)
           if [ -z "$APP_DIR" ]; then
-            echo "ОШИБКА: В репозитории нет папки app и нет архива EV3Controller-Pro.zip!"
-            ls -la
+            echo "ОШИБКА: Папка app не найдена!"
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$APP_DIR")
-          echo "Переход в папку проекта: $PROJECT_DIR"
           cd "$PROJECT_DIR"
 
-          # Запускаем сборку APK напрямую через установленный Gradle
+          # 3. Авто-исправление: добавляем недостающий цвет фона иконки ic_launcher_background
+          mkdir -p app/src/main/res/values
+          if ! grep -rq "ic_launcher_background" app/src/main/res/values/; then
+            cat << 'EOF' > app/src/main/res/values/ic_launcher_background.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="ic_launcher_background">#0F172A</color>
+          </resources>
+          EOF
+          fi
+
+          # 4. Запускаем сборку APK
           gradle assembleDebug --no-daemon --stacktrace
 
-          # Копируем готовый APK для скачивания
+          # 5. Копируем готовый APK для скачивания
           mkdir -p "$GITHUB_WORKSPACE/dist"
           APK_FILE=$(find . -name "app-debug.apk" | head -n 1)
           cp "$APK_FILE" "$GITHUB_WORKSPACE/dist/EV3Controller.apk"
