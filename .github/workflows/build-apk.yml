@@ -22,25 +22,48 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Настройка Gradle и кэширования
+      - name: Установка Gradle 8.7 (работает даже без файла gradlew)
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
 
-      - name: Права на выполнение gradlew
-        run: chmod +x ./gradlew
-
-      - name: Сборка Debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
-
-      - name: Подготовка имен файлов APK
+      - name: Поиск проекта и сборка Debug APK
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/EV3Controller.apk
+          # 1. Если в репозиторий загружен zip-архив, автоматически распаковываем его
+          for z in *.zip; do
+            if [ -f "$z" ]; then
+              echo "Распаковка архива $z..."
+              unzip -q -o "$z"
+            fi
+          done
 
-      - name: Загрузка готового APK в Artifacts (app-debug.apk и EV3Controller.apk)
+          # 2. Ищем папку, в которой лежит Android-проект (папка app)
+          APP_DIR=$(find . -maxdepth 3 -type d -name "app" | head -n 1)
+          if [ -z "$APP_DIR" ]; then
+            echo "ОШИБКА: Папка 'app' не найдена в репозитории! Загрузите EV3Controller-Pro.zip во вкладку Code."
+            ls -la
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$APP_DIR")
+          echo "Переход в папку проекта: $PROJECT_DIR"
+          cd "$PROJECT_DIR"
+
+          # 3. Запускаем сборку напрямую через установленный Gradle 8.7
+          gradle assembleDebug --no-daemon --stacktrace
+
+          # 4. Собираем готовый APK в папку dist в корне
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          APK_FILE=$(find . -name "app-debug.apk" | head -n 1)
+          cp "$APK_FILE" "$GITHUB_WORKSPACE/dist/EV3Controller.apk"
+          cp "$APK_FILE" "$GITHUB_WORKSPACE/dist/app-debug.apk"
+
+      - name: Загрузка готового APK в Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: EV3Controller-Pro-APK
           path: |
-            app/build/outputs/apk/debug/app-debug.apk
-            app/build/outputs/apk/debug/EV3Controller.apk
+            dist/EV3Controller.apk
+            dist/app-debug.apk
           if-no-files-found: error
           retention-days: 90
